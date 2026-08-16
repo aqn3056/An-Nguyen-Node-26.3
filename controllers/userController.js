@@ -1,25 +1,71 @@
-function register(req, res) {
-  const { name, email, password } = req.body;
+const crypto = require("crypto");
+const util = require("util");
+const { userSchema } = require("../validation/userSchema");
 
-  const user = { name, email, password };
+const scrypt = util.promisify(crypto.scrypt);
 
-  global.users.push(user);
-  global.user_id = user;
+async function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derivedKey = await scrypt(password, salt, 64);
+  return `${salt}:${derivedKey.toString("hex")}`;
+}
+
+async function comparePassword(inputPassword, storedHash) {
+  if (!inputPassword || !storedHash) return false;
+
+  const [salt, key] = storedHash.split(":");
+  if (!salt || !key) return false;
+
+  const storedKey = Buffer.from(key, "hex");
+  const derivedKey = await scrypt(inputPassword, salt, 64);
+
+  if (storedKey.length !== derivedKey.length) return false;
+
+  return crypto.timingSafeEqual(storedKey, derivedKey);
+}
+
+async function register(req, res) {
+  if (!req.body) req.body = {};
+
+  const { error, value } = userSchema.validate(req.body, {
+    abortEarly: false,
+  });
+
+  if (error) {
+    const message = error.details.map((detail) => detail.message).join(", ");
+    return res.status(400).json({ message });
+  }
+
+  const existingUser = global.users.find((u) => u.email === value.email);
+
+  if (existingUser) {
+    return res.status(400).json({ message: "That email is already in use." });
+  }
+
+  const hashedPassword = await hashPassword(value.password);
+
+  const newUser = { email: value.email, name: value.name, hashedPassword };
+
+  global.users.push(newUser);
+  global.user_id = newUser;
 
   res.status(201).json({
-    name: user.name,
-    email: user.email,
+    name: newUser.name,
+    email: newUser.email,
   });
 }
 
-function logon(req, res) {
+async function logon(req, res) {
+  if (!req.body) req.body = {};
+
   const { email, password } = req.body;
 
-  const user = global.users.find(
-    (u) => u.email === email && u.password === password,
-  );
+  const user = global.users.find((u) => u.email === email);
 
-  if (!user) {
+  const goodCredentials =
+    user && (await comparePassword(password, user.hashedPassword));
+
+  if (!goodCredentials) {
     return res.status(401).json({
       message: "Authentication failed.",
     });
