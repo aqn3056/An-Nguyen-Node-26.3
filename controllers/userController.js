@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const util = require("util");
+const pool = require("../db/pg-pool");
 const { userSchema } = require("../validation/userSchema");
 
 const scrypt = util.promisify(crypto.scrypt);
@@ -24,7 +25,7 @@ async function comparePassword(inputPassword, storedHash) {
   return crypto.timingSafeEqual(storedKey, derivedKey);
 }
 
-async function register(req, res) {
+async function register(req, res, next) {
   if (!req.body) req.body = {};
 
   const { error, value } = userSchema.validate(req.body, {
@@ -36,18 +37,26 @@ async function register(req, res) {
     return res.status(400).json({ message });
   }
 
-  const existingUser = global.users.find((u) => u.email === value.email);
-
-  if (existingUser) {
-    return res.status(400).json({ message: "That email is already in use." });
-  }
-
   const hashedPassword = await hashPassword(value.password);
 
-  const newUser = { email: value.email, name: value.name, hashedPassword };
+  let result = null;
 
-  global.users.push(newUser);
-  global.user_id = newUser;
+  try {
+    result = await pool.query(
+      `INSERT INTO users (email, name, hashed_password)
+       VALUES ($1, $2, $3) RETURNING id, email, name`,
+      [value.email, value.name, hashedPassword],
+    );
+  } catch (e) {
+    if (e.code === "23505") {
+      return res.status(400).json({ message: "That email is already in use." });
+    }
+    return next(e);
+  }
+
+  const newUser = result.rows[0];
+
+  global.user_id = newUser.id;
 
   res.status(201).json({
     name: newUser.name,
@@ -60,10 +69,14 @@ async function logon(req, res) {
 
   const { email, password } = req.body;
 
-  const user = global.users.find((u) => u.email === email);
+  const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+    email,
+  ]);
+
+  const user = result.rows[0];
 
   const goodCredentials =
-    user && (await comparePassword(password, user.hashedPassword));
+    user && (await comparePassword(password, user.hashed_password));
 
   if (!goodCredentials) {
     return res.status(401).json({
@@ -71,7 +84,7 @@ async function logon(req, res) {
     });
   }
 
-  global.user_id = user;
+  global.user_id = user.id;
 
   res.status(200).json({
     name: user.name,
