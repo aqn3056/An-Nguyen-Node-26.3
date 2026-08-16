@@ -75,10 +75,15 @@ async function logon(req, res) {
 
   const user = result.rows[0];
 
-  const goodCredentials =
-    user && (await comparePassword(password, user.hashed_password));
+  if (!user) {
+    return res.status(401).json({
+      message: "Authentication failed.",
+    });
+  }
 
-  if (!goodCredentials) {
+  const passwordMatches = await comparePassword(password, user.hashed_password);
+
+  if (!passwordMatches) {
     return res.status(401).json({
       message: "Authentication failed.",
     });
