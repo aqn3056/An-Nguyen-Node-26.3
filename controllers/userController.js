@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const util = require("util");
-const pool = require("../db/pg-pool");
+const prisma = require("../db/prisma");
 const { userSchema } = require("../validation/userSchema");
 
 const scrypt = util.promisify(crypto.scrypt);
@@ -37,43 +37,67 @@ async function register(req, res, next) {
     return res.status(400).json({ message });
   }
 
-  const hashedPassword = await hashPassword(value.password);
+  value.email = value.email.trim().toLowerCase();
 
-  let result = null;
+  let existingUser = null;
 
   try {
-    result = await pool.query(
-      `INSERT INTO users (email, name, hashed_password)
-       VALUES ($1, $2, $3) RETURNING id, email, name`,
-      [value.email, value.name, hashedPassword],
-    );
+    existingUser = await prisma.user.findUnique({
+      where: { email: value.email },
+    });
   } catch (e) {
-    if (e.code === "23505") {
+    return next(e);
+  }
+
+  if (existingUser) {
+    return res.status(400).json({ message: "That email is already in use." });
+  }
+
+  value.hashedPassword = await hashPassword(value.password);
+  delete value.password;
+
+  let user = null;
+
+  try {
+    user = await prisma.user.create({
+      data: value,
+      select: { name: true, email: true, id: true },
+    });
+  } catch (e) {
+    if (e.code === "P2002") {
       return res.status(400).json({ message: "That email is already in use." });
     }
     return next(e);
   }
 
-  const newUser = result.rows[0];
-
-  global.user_id = newUser.id;
+  global.user_id = Number(user.id);
 
   res.status(201).json({
-    name: newUser.name,
-    email: newUser.email,
+    name: user.name,
+    email: user.email,
   });
 }
 
-async function logon(req, res) {
+async function logon(req, res, next) {
   if (!req.body) req.body = {};
 
   const { email, password } = req.body;
 
-  const result = await pool.query("SELECT * FROM users WHERE email = $1", [
-    email,
-  ]);
+  if (!email || !password || typeof email !== "string") {
+    return res.status(401).json({
+      message: "Authentication failed.",
+    });
+  }
 
-  const user = result.rows[0];
+  let user = null;
+
+  try {
+    user = await prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+  } catch (e) {
+    return next(e);
+  }
 
   if (!user) {
     return res.status(401).json({
@@ -81,7 +105,7 @@ async function logon(req, res) {
     });
   }
 
-  const passwordMatches = await comparePassword(password, user.hashed_password);
+  const passwordMatches = await comparePassword(password, user.hashedPassword);
 
   if (!passwordMatches) {
     return res.status(401).json({
@@ -89,7 +113,7 @@ async function logon(req, res) {
     });
   }
 
-  global.user_id = user.id;
+  global.user_id = Number(user.id);
 
   res.status(200).json({
     name: user.name,
