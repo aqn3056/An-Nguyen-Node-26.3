@@ -42,12 +42,7 @@ async function create(req, res, next) {
     return next(e);
   }
 
-  res.status(201).json({
-    id: task.id,
-    title: task.title,
-    isCompleted: task.isCompleted,
-    is_completed: task.isCompleted,
-  });
+  res.status(201).json(task);
 }
 
 async function index(req, res, next) {

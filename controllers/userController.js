@@ -64,7 +64,7 @@ async function register(req, res, next) {
       select: { name: true, email: true, id: true },
     });
   } catch (e) {
-    if (e.code === "P2002") {
+    if (e.name === "PrismaClientKnownRequestError" && e.code === "P2002") {
       return res.status(400).json({ message: "That email is already in use." });
     }
     return next(e);
