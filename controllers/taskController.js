@@ -1,12 +1,6 @@
 const prisma = require("../db/prisma");
 const { taskSchema, patchTaskSchema } = require("../validation/taskSchema");
 
-function getCurrentUserId() {
-  const userId = Number(global.user_id);
-  if (!Number.isInteger(userId) || userId <= 0) return null;
-  return userId;
-}
-
 function parseTaskId(param) {
   const taskId = Number(param);
   if (!Number.isInteger(taskId) || taskId <= 0) return null;
@@ -25,11 +19,7 @@ async function create(req, res, next) {
     return res.status(400).json({ message });
   }
 
-  const userId = getCurrentUserId();
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  const userId = req.user.id;
 
   let task = null;
 
@@ -52,11 +42,7 @@ async function create(req, res, next) {
 }
 
 async function index(req, res, next) {
-  const userId = getCurrentUserId();
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  const userId = req.user.id;
 
   let page = parseInt(req.query.page) || 1;
   let limit = parseInt(req.query.limit) || 10;
@@ -120,11 +106,7 @@ async function index(req, res, next) {
 }
 
 async function show(req, res, next) {
-  const userId = getCurrentUserId();
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  const userId = req.user.id;
 
   const taskId = parseTaskId(req.params?.id);
 
@@ -171,11 +153,7 @@ async function show(req, res, next) {
 async function update(req, res, next) {
   if (!req.body) req.body = {};
 
-  const userId = getCurrentUserId();
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  const userId = req.user.id;
 
   const taskId = parseTaskId(req.params?.id);
 
@@ -214,11 +192,7 @@ async function update(req, res, next) {
 }
 
 async function deleteTask(req, res, next) {
-  const userId = getCurrentUserId();
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  const userId = req.user.id;
 
   const taskId = parseTaskId(req.params?.id);
 
@@ -257,11 +231,7 @@ async function bulkCreate(req, res, next) {
     });
   }
 
-  const userId = getCurrentUserId();
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  const userId = req.user.id;
 
   const validTasks = [];
 
