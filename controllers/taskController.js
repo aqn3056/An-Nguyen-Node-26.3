@@ -93,6 +93,10 @@ async function index(req, res, next) {
     return next(e);
   }
 
+  if (tasks.length === 0) {
+    return res.status(404).json({ message: "No tasks found for user" });
+  }
+
   const pagination = {
     page,
     limit,
