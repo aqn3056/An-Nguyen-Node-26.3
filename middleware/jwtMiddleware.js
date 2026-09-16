@@ -17,6 +17,7 @@ module.exports = async (req, res, next) => {
       return send401(res);
     }
     req.user = { id: decoded.id };
+    if (decoded.roles) req.user.roles = decoded.roles;
     if (["POST", "PATCH", "PUT", "DELETE", "CONNECT"].includes(req.method)) {
       if (req.get("X-CSRF-TOKEN") != decoded.csrfToken) {
         return send401(res);

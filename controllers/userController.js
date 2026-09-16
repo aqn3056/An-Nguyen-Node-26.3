@@ -17,6 +17,7 @@ const cookieFlags = (req) => {
 
 const setJwtCookie = (req, res, user) => {
   const payload = { id: user.id, csrfToken: crypto.randomUUID() };
+  if (user.roles) payload.roles = user.roles;
   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
   res.cookie("jwt", token, { ...cookieFlags(req), maxAge: 3600000 });
   return payload.csrfToken;

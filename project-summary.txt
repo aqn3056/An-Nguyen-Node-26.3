@@ -1,1 +1,26 @@
 https://an-nguyen-node-26-3.onrender.com
+
+Assignment 11: Role Based Access Control (RBAC)
+
+The User model has a new optional column, roles, holding a comma-delimited list of role names (for example "manager"). There is no REST API for assigning roles. A reviewer assigns a role directly in the database with Prisma Studio (npx prisma studio, open the users table, set roles to manager on the chosen record, save) or with SQL: UPDATE users SET roles = 'manager' WHERE email = 'someone@example.com';
+
+At logon time, if the user record has roles, they are included in the JWT. jwtMiddleware copies them from the JWT into req.user.roles. Because roles are read from the JWT and not from the database on each request, a user must log on again after a role is added or removed before the change takes effect.
+
+routes/analyticsRoutes.js applies a manager-only middleware ahead of every route under /api/analytics. If req.user.roles is missing or does not include "manager", the request is rejected with status 401 and the body { "message": "Manager role required." }. A request with no valid JWT cookie is still rejected first by jwtMiddleware with 401 and { "message": "No user is authenticated." }.
+
+Modified REST APIs. All three now require a logged-on user whose roles include "manager". All are GET requests with no request body; the jwt cookie is sent automatically and no X-CSRF-TOKEN header is required.
+
+GET /api/analytics/users
+  Query parameters: page (default 1), limit (default 10, maximum 100)
+  Returns every user with their total task count and up to 5 incomplete task ids, plus pagination information.
+
+GET /api/analytics/users/:id
+  Path parameter: id, the numeric id of a user
+  Query parameters: none
+  Returns task statistics, the 10 most recent tasks, and weekly progress for that user.
+
+GET /api/analytics/tasks/search
+  Query parameters: q (required, at least 2 characters), limit (default 20)
+  Searches all users' tasks by task title or user name.
+
+Unchanged REST APIs: POST /api/users/register and POST /api/users/logon accept the same request bodies as before; the only difference is that the JWT cookie set by logon now carries the user's roles when the record has any.
